@@ -1,0 +1,26 @@
+{
+  "strings": {
+    "title": "Contoso · Help",
+    "intro": "Hi! Ask me anything about your account.",
+    "placeholder": "Type your question…",
+    "send": "Send",
+    "open": "Open chat",
+    "close": "Close",
+    "end": "End conversation",
+    "end_confirm": "End this conversation? The chat will start over.",
+    "end_yes": "Yes, end it",
+    "cancel": "Cancel",
+    "error": "Could not send. Try again.",
+    "too_long": "The message is too long.",
+    "too_many": "Too many messages. Wait a few minutes.",
+    "unavailable": "Could not open the chat. Try again.",
+    "identity": "We could not verify your session. Reload the page or sign in again.",
+    "support": "Support",
+    "waiting": ["One moment…", "Looking into it…", "Almost there…"],
+    "waiting_cold": ["Waking up…", "Getting everything ready…"]
+  },
+  "places": {
+    "dashboard": { "user_strip": true, "css": ".egc{right:24px;bottom:24px}" },
+    "mobile": { "css": ".egc-bubble{width:48px;height:48px;font-size:22px}" }
+  }
+}
