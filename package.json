@@ -1,0 +1,11 @@
+{
+  "name": "chatboxes-egpt",
+  "version": "0.1.0",
+  "description": "The website chatbox for eGPT's http limb: the widget, its skins, phrases and places.",
+  "license": "MIT",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test"
+  }
+}

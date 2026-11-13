@@ -1,0 +1,15 @@
+/* skins/example — a neutral teal look. Every base rule of the widget sits in :where(), so these win as written. */
+.egc {
+  --egc-bg: #f4f7f7;
+  --egc-user-bg: #0f766e;
+  --egc-user-fg: #ffffff;
+  --egc-ai-bg: #ffffff;
+  --egc-ai-fg: #1f2933;
+  --egc-ai-border: 1px solid #d5dede;
+  --egc-ai-radius: 4px 14px 14px 14px;
+  --egc-user-radius: 14px 4px 14px 14px;
+  --egc-ai-shadow: 0 1px 2px rgba(0, 0, 0, .08);
+  --egc-bubble-max-width: 80%;
+  --egc-avatar: url("avatar.svg");
+}
+.egc-bubble, .egc-head { background: #0f766e; }
