@@ -54,6 +54,25 @@ What `info` holds:
 - `init` is `true` or `"prime"`: the page load sends one `{kind: init}`, but only with an identity.
 - `places`, when present, lists the names the limb accepts. Without it, the skin's place names are used.
 
+
+## The warm-up when the panel opens
+
+With `init: prime` the limb wakes the being when the widget says the page is here, so the first line finds it warm.
+Two attributes on the script tag move that moment and say what the warm-up is about:
+
+- `data-prime="open"`: the init goes out on the panel's first open, not on the page load. A visitor who never opens
+  the chat costs nothing.
+- `data-prime-text="…"`: the warm-up phrase, sent with the init as `prime_text`. A page that lets its user write the
+  phrase sets `window.egptChatPrimeText` (a string, or a function returning one); it is read when the init goes out and
+  beats the attribute. The phrase is trimmed, control characters become spaces and it is capped at `max_chars`.
+  With no phrase the init carries none and the limb uses its own (`prime_text` in the chatbox config).
+
+```html
+<script src="https://www.example.com/chat/contoso/widget.js" data-identity="…" data-prime="open"
+        data-prime-text="revisa mi información, información relacionada reciente" defer></script>
+```
+
+The limb side (accepting `prime_text` and delivering it as the visitor's line) is a change to eGPT core's http limb.
 ## skin.json
 
 ```json
