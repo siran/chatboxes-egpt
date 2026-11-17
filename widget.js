@@ -29,6 +29,7 @@
     intro: '',   // the panel's first line (Deep Chat introMessage), shown again after an end; empty: none
     waiting: [],   // short phrases rotating in the loading bubble instead of ⏳; empty: ⏳
     waiting_cold: [],   // the same, for a line to a cold conversation (the being not warmed lately); empty: waiting
+    prime_text: '',   // the opening phrase sent when the chatbox opens (init: prime) if the page gives none; empty: none is sent
   };
   var PHRASES = ['waiting', 'waiting_cold'];
   var NAME_RE = /^[a-z0-9][a-z0-9_-]*$/;
@@ -38,10 +39,11 @@
   var base = ((me && me.src) || '').replace(/[^\/?#]*(?:[?#].*)?$/, '');   // <base><client>/
   var identity = (me && me.getAttribute('data-identity')) || null;
   var place = (me && me.getAttribute('data-place')) || null;
-  // data-prime="open": the init (the limb's warm-up when info.init is 'prime') waits for the panel's first open
-  // instead of the page load. The warm-up phrase goes with the init as prime_text: window.egptChatPrimeText (a string,
-  // or a function returning one, read when the init goes out) or else data-prime-text; trimmed, control characters
-  // turned into spaces, capped at max_chars. None: the init carries no phrase and the limb uses its own.
+  // data-prime="open": the init (info.init 'prime': the limb sends the opening phrase as the visitor's first line) waits for
+  // the panel's first open instead of the page load. The opening phrase goes with the init as prime_text:
+  // window.egptChatPrimeText (a string, or a function returning one, read when the init goes out), else data-prime-text,
+  // else the skin's strings.prime_text; trimmed, control characters turned into spaces, capped at max_chars. None (all
+  // empty): the init carries no phrase and the limb sends nothing; it holds no phrase of its own.
   var primeOnOpen = !!me && me.getAttribute('data-prime') === 'open';
   var primeAttr = (me && me.getAttribute('data-prime-text')) || null;
 
@@ -283,7 +285,7 @@
     // the --egc-frio / --egc-tibio custom properties on the deep-chat element (they inherit into its shadow root)
     // show one, so switching never re-renders Deep Chat (see cold()).
     var WAIT_MS = 2500;
-    var COLD_MS = 4 * 60000;   // the limb's prime gap: a session quiet this long is guessed cold until the POST says
+    var COLD_MS = 4 * 60000;   // the limb's cold window: a session quiet this long is guessed cold until the POST says
     var esc = function (t) { return t.replace(/[&<>"']/g, function (c) { return '&#' + c.charCodeAt(0) + ';'; }); };
     var rotation = function (w, k) {   // k: the keyframes' name, one per set (each set has its own count)
       var n = w.length, on = (100 / n).toFixed(3);
@@ -351,6 +353,7 @@
       var v = null;
       try { var h = window.egptChatPrimeText; v = typeof h === 'function' ? h() : h; } catch (e) { v = null; }
       if (typeof v !== 'string' || !v.trim()) v = primeAttr;
+      if (typeof v !== 'string' || !v.trim()) v = S.prime_text;
       if (typeof v !== 'string') return null;
       v = v.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/ {2,}/g, ' ').trim();
       return v ? v.slice(0, C.maxChars) : null;
@@ -403,7 +406,7 @@
     q('.egc-bubble').onclick = function () { open(panel.hidden, true); };
     q('.egc-x').onclick = function () { open(false); };
     // C.init: the page load (or, with data-prime="open", the panel's first open) says so, once (POST messages, kind
-    // init, with the warm-up phrase as prime_text if there is one); the answer's session is this page's.
+    // init, with the opening phrase as prime_text if there is one); the answer's session is this page's.
     if (!primeOnOpen) sendInit();
     try { if (localStorage.getItem(KEY + ':open')) open(true); } catch (e) { /* private mode */ }
   }
