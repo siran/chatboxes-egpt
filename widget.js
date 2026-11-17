@@ -38,6 +38,12 @@
   var base = ((me && me.src) || '').replace(/[^\/?#]*(?:[?#].*)?$/, '');   // <base><client>/
   var identity = (me && me.getAttribute('data-identity')) || null;
   var place = (me && me.getAttribute('data-place')) || null;
+  // data-prime="open": the init (the limb's warm-up when info.init is 'prime') waits for the panel's first open
+  // instead of the page load. The warm-up phrase goes with the init as prime_text: window.egptChatPrimeText (a string,
+  // or a function returning one, read when the init goes out) or else data-prime-text; trimmed, control characters
+  // turned into spaces, capped at max_chars. None: the init carries no phrase and the limb uses its own.
+  var primeOnOpen = !!me && me.getAttribute('data-prime') === 'open';
+  var primeAttr = (me && me.getAttribute('data-prime-text')) || null;
 
   var has = function (o, k) { return Object.prototype.hasOwnProperty.call(o, k); };
   var isMap = function (v) { return v != null && typeof v === 'object' && !Array.isArray(v); };
@@ -341,10 +347,31 @@
       body.appendChild(chat);
     };
 
+    var primeText = function () {
+      var v = null;
+      try { var h = window.egptChatPrimeText; v = typeof h === 'function' ? h() : h; } catch (e) { v = null; }
+      if (typeof v !== 'string' || !v.trim()) v = primeAttr;
+      if (typeof v !== 'string') return null;
+      v = v.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/ {2,}/g, ' ').trim();
+      return v ? v.slice(0, C.maxChars) : null;
+    };
+    var inited = false;
+    var sendInit = function () {
+      if (inited || !C.init || !identity) return;
+      inited = true;
+      var body = { kind: 'init', session: token, identity: identity, place: sent };
+      var t = primeText();
+      if (t) body.prime_text = t;
+      opening = fetch(base + 'messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
+        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (j) { if (j && j.session !== token) { token = j.session; store(KEY, token); listen(); } }, function () { /* the next line says what failed */ })
+        .then(function () { opening = null; });
+    };
     var open = function (on, focus) {
       panel.hidden = !on;
       store(KEY + ':open', on ? '1' : null);
       if (!on) { if (es) { es.close(); es = null; } return; }
+      if (primeOnOpen) sendInit();
       if (chat) { listen(); chat.scrollToBottom(); if (focus) chat.focusInput(); return; }
       if (starting) return;
       starting = true;
@@ -375,13 +402,9 @@
     q('.egc-yes').onclick = end;
     q('.egc-bubble').onclick = function () { open(panel.hidden, true); };
     q('.egc-x').onclick = function () { open(false); };
-    // C.init: the page load says so, once (POST messages, kind init); the answer's session is this page's.
-    if (C.init && identity) {
-      opening = fetch(base + 'messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: 'init', session: token, identity: identity, place: sent }) })
-        .then(function (r) { return r.ok ? r.json() : null; })
-        .then(function (j) { if (j && j.session !== token) { token = j.session; store(KEY, token); listen(); } }, function () { /* the next line says what failed */ })
-        .then(function () { opening = null; });
-    }
+    // C.init: the page load (or, with data-prime="open", the panel's first open) says so, once (POST messages, kind
+    // init, with the warm-up phrase as prime_text if there is one); the answer's session is this page's.
+    if (!primeOnOpen) sendInit();
     try { if (localStorage.getItem(KEY + ':open')) open(true); } catch (e) { /* private mode */ }
   }
 })();

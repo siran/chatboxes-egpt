@@ -14,7 +14,7 @@ const AL = { abrin: 'CTS', user_type: 'P', short_name: 'Ana Demo', username: 'ad
 const tok = (who = AL) => `${Buffer.from(JSON.stringify({ ...who, exp: Math.floor(Date.now() / 1000) + 3600 })).toString('base64url')}.c2ln`;
 const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k);
 
-function page({ identity = null, stored = {}, place = null, vars = {}, files = { info: INFO }, src = `${BASE}widget.js` } = {}) {
+function page({ identity = null, stored = {}, place = null, attrs = {}, hook, vars = {}, files = { info: INFO }, src = `${BASE}widget.js` } = {}) {
   const styles = [];
   const storage = new Map(Object.entries(stored));
   const calls = [], assets = [], sources = [], parts = new Map(), responses = [];
@@ -22,7 +22,7 @@ function page({ identity = null, stored = {}, place = null, vars = {}, files = {
   const node = (extra = {}) => ({ hidden: false, textContent: '', setAttribute() {}, appendChild() {}, ...extra });
   const root = node({ querySelector: (sel) => parts.get(sel) ?? (parts.set(sel, node({ hidden: ['.egc-panel', '.egc-ask', '.egc-err', '.egc-user'].includes(sel) })), parts.get(sel)) });
   const document = {
-    currentScript: { src, getAttribute: (n) => (n === 'data-identity' ? identity : n === 'data-place' ? place : null) },
+    currentScript: { src, getAttribute: (n) => (n === 'data-identity' ? identity : n === 'data-place' ? place : has(attrs, n) ? attrs[n] : null) },
     body: node(), head: node({ appendChild: (s) => styles.push(s.textContent) }),
     createElement: (tag) => {
       if (tag === 'div') return root;
@@ -33,7 +33,7 @@ function page({ identity = null, stored = {}, place = null, vars = {}, files = {
     },
     addEventListener() {},
   };
-  const window = { getComputedStyle: () => ({ getPropertyValue: (k) => vars[k] ?? '' }), customElements: { get: () => true }, EventSource: function (s) { sources.push(s); this.close = () => {}; } };
+  const window = { getComputedStyle: () => ({ getPropertyValue: (k) => vars[k] ?? '' }), customElements: { get: () => true }, ...(hook !== undefined ? { egptChatPrimeText: hook } : {}), EventSource: function (s) { sources.push(s); this.close = () => {}; } };
   const localStorage = { getItem: (k) => storage.get(k) ?? null, setItem: (k, v) => storage.set(k, v), removeItem: (k) => storage.delete(k) };
   const fetch = async (href, init) => {
     const name = href.startsWith(BASE) ? href.slice(BASE.length).split('?')[0] : href;
@@ -336,5 +336,38 @@ describe('waiting_cold', () => {
     signals.newUserMessage.listener({ messages: [{ text: 'hola' }] });
     await flush();
     assert.deepEqual(p.chat().style.props, {});
+  });
+});
+
+describe('the warm-up on open (data-prime, prime_text)', () => {
+  const PRIME = { ...INFO, init: 'prime' };
+  it('data-prime="open": nothing on load; one init on the first open, none on the next', async () => {
+    const identity = tok();
+    const p = await loaded({ identity, attrs: { 'data-prime': 'open' }, files: { info: PRIME } });
+    assert.deepEqual(p.calls, []);
+    p.open(); await flush();
+    assert.equal(p.calls.filter((c) => c.body?.kind === 'init').length, 1);
+    p.part('.egc-x').onclick(); p.open(); await flush();
+    assert.equal(p.calls.filter((c) => c.body?.kind === 'init').length, 1);
+  });
+  it('data-prime-text goes as prime_text: trimmed, control characters as spaces, capped at max_chars', async () => {
+    const identity = tok();
+    const p = await loaded({ identity, attrs: { 'data-prime-text': '  revisa\nmi\tinformación  ' }, files: { info: { ...PRIME, max_chars: 12 } } });
+    assert.equal(p.calls[0].body.prime_text, 'revisa mi in');
+  });
+  it('window.egptChatPrimeText (a function, read when the init goes out) beats data-prime-text', async () => {
+    const identity = tok();
+    let phrase = 'antes';
+    const p = await loaded({ identity, hook: () => phrase, attrs: { 'data-prime': 'open', 'data-prime-text': 'del atributo' }, files: { info: PRIME } });
+    phrase = 'la del usuario';
+    p.open(); await flush();
+    assert.equal(p.calls[0].body.prime_text, 'la del usuario');
+  });
+  it('no phrase, or a blank one: the init carries no prime_text (the limb uses its own)', async () => {
+    const identity = tok();
+    for (const o of [{}, { attrs: { 'data-prime-text': '   ' } }, { hook: '' }]) {
+      const p = await loaded({ identity, ...o, files: { info: PRIME } });
+      assert.equal(has(p.calls[0].body, 'prime_text'), false);
+    }
   });
 });
