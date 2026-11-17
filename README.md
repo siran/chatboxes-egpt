@@ -55,29 +55,36 @@ What `info` holds:
 - `places`, when present, lists the names the limb accepts. Without it, the skin's place names are used.
 
 
-## The warm-up when the panel opens
+## The opening phrase
 
-With `init: prime` the limb wakes the being when the widget says the page is here, so the first line finds it warm.
-Two attributes on the script tag move that moment and say what the warm-up is about:
+With `init: prime` (off unless the node's chatbox config says so) opening the chatbox sends the opening: one message,
+the visitor's first line, which the limb handles like a typed one (same limits, recorded, the being answers it). The
+phrase comes from here, never from the limb. The widget picks the first that is not blank:
+
+1. `window.egptChatPrimeText`: a string, or a function returning one, read when the init goes out. A page that lets its
+   user write the phrase sets this.
+2. `data-prime-text="…"` on the script tag.
+3. `strings.prime_text` in `skin.json`: the plugin's default for the chatbox. The built-in default is empty.
+
+The phrase is trimmed, control characters become spaces, and it is capped at `max_chars`. If all three are empty the init
+carries no phrase and the limb sends nothing to the being: no turn, no notice. A reload or a second tab does not repeat the
+opening into a conversation that already has lines.
 
 - `data-prime="open"`: the init goes out on the panel's first open, not on the page load. A visitor who never opens
   the chat costs nothing.
-- `data-prime-text="…"`: the warm-up phrase, sent with the init as `prime_text`. A page that lets its user write the
-  phrase sets `window.egptChatPrimeText` (a string, or a function returning one); it is read when the init goes out and
-  beats the attribute. The phrase is trimmed, control characters become spaces and it is capped at `max_chars`.
-  With no phrase the init carries none and the limb uses its own (`prime_text` in the chatbox config).
 
 ```html
 <script src="https://www.example.com/chat/contoso/widget.js" data-identity="…" data-prime="open"
         data-prime-text="revisa mi información, información relacionada reciente" defer></script>
 ```
 
-The limb side (accepting `prime_text` and delivering it as the visitor's line) is a change to eGPT core's http limb.
+An operator who used `prime_text` in the chatbox's block in eGPT's config moves it to the skin's `strings.prime_text`.
+
 ## skin.json
 
 ```json
 {
-  "strings": { "title": "…", "intro": "…", "waiting": ["…"], "waiting_cold": ["…"] },
+  "strings": { "title": "…", "intro": "…", "waiting": ["…"], "waiting_cold": ["…"], "prime_text": "…" },
   "places": { "dashboard": { "user_strip": true, "css": ".egc{right:24px}" } }
 }
 ```
@@ -97,6 +104,7 @@ The limb side (accepting `prime_text` and delivering it as the visitor's line) i
 | `support` | `Soporte` | heads a human support line: `Soporte · <user>` |
 | `waiting` | `[]` (⏳) | phrases rotating in the loading bubble, each shown for 2.5 s; at most 12 phrases of 80 characters |
 | `waiting_cold` | `[]` (= waiting) | the set used when the line goes to a cold conversation, one the being has not been warmed for lately. The limb says which in the POST's `cold`; until it answers, the widget guesses from its own last line. |
+| `prime_text` | (none) | the opening phrase for `init: prime` when the page gives none (see "The opening phrase"); empty: nothing is sent |
 
 `places` gives each place name (lowercase letters, digits, `-` and `_`) two optional settings:
 - `css`: up to 20000 characters, added after `skin.css`.

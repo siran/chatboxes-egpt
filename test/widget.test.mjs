@@ -363,11 +363,37 @@ describe('the warm-up on open (data-prime, prime_text)', () => {
     p.open(); await flush();
     assert.equal(p.calls[0].body.prime_text, 'la del usuario');
   });
-  it('no phrase, or a blank one: the init carries no prime_text (the limb uses its own)', async () => {
+  it("no phrase anywhere, or only blank ones: the init carries no prime_text (the limb sends nothing; it holds none)", async () => {
     const identity = tok();
-    for (const o of [{}, { attrs: { 'data-prime-text': '   ' } }, { hook: '' }]) {
-      const p = await loaded({ identity, ...o, files: { info: PRIME } });
+    for (const o of [{}, { attrs: { 'data-prime-text': '   ' } }, { hook: '' }, { files: { info: PRIME, 'skin.json': { strings: { prime_text: '  ' } } } }]) {
+      const p = await loaded({ identity, ...o, files: { info: PRIME, ...(o.files ?? {}) } });
       assert.equal(has(p.calls[0].body, 'prime_text'), false);
     }
+  });
+  it("the skin's strings.prime_text is the default: sent when the page gives none, cleaned and capped like the page's", async () => {
+    const identity = tok();
+    const files = (n) => ({ info: { ...PRIME, max_chars: n }, 'skin.json': { strings: { prime_text: '  Hola,\nnecesito ayuda  ' } } });
+    const p = await loaded({ identity, files: files(4000) });
+    assert.equal(p.calls[0].body.prime_text, 'Hola, necesito ayuda');
+    const q = await loaded({ identity, files: files(4) });
+    assert.equal(q.calls[0].body.prime_text, 'Hola');
+    const o = await loaded({ identity, attrs: { 'data-prime': 'open' }, files: files(4000) });
+    assert.deepEqual(o.calls, []);
+    o.open(); await flush();
+    assert.equal(o.calls[0].body.prime_text, 'Hola, necesito ayuda');
+  });
+  it("the page's phrase beats the skin's default: data-prime-text, and window.egptChatPrimeText over both", async () => {
+    const identity = tok();
+    const skin = { 'skin.json': { strings: { prime_text: 'de la skin' } } };
+    const a = await loaded({ identity, attrs: { 'data-prime-text': 'del atributo' }, files: { info: PRIME, ...skin } });
+    assert.equal(a.calls[0].body.prime_text, 'del atributo');
+    const b = await loaded({ identity, hook: () => 'la del usuario', attrs: { 'data-prime-text': 'del atributo' }, files: { info: PRIME, ...skin } });
+    assert.equal(b.calls[0].body.prime_text, 'la del usuario');
+    const c = await loaded({ identity, hook: () => '', attrs: { 'data-prime-text': ' ' }, files: { info: PRIME, ...skin } });
+    assert.equal(c.calls[0].body.prime_text, 'de la skin');   // blank ones fall through to the skin's
+  });
+  it('a skin prime_text that is not a string is ignored: no phrase', async () => {
+    const p = await loaded({ identity: tok(), files: { info: PRIME, 'skin.json': { strings: { prime_text: ['x'] } } } });
+    assert.equal(has(p.calls[0].body, 'prime_text'), false);
   });
 });

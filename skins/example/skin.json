@@ -17,7 +17,8 @@
     "identity": "We could not verify your session. Reload the page or sign in again.",
     "support": "Support",
     "waiting": ["One moment…", "Looking into it…", "Almost there…"],
-    "waiting_cold": ["Waking up…", "Getting everything ready…"]
+    "waiting_cold": ["Waking up…", "Getting everything ready…"],
+    "prime_text": "Hi, I need help with my account."
   },
   "places": {
     "dashboard": { "user_strip": true, "css": ".egc{right:24px;bottom:24px}" },
