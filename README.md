@@ -5,7 +5,7 @@ The website chatbox for [eGPT](https://github.com/siran/egpt)'s http limb: the w
 eGPT's core keeps only the transport. Its http limb handles the API (messages, events, end), visitor sessions, the signed identity, rate limits and the delivery to the being. Everything the visitor sees lives here:
 
 - `widget.js`: the loader. It draws a bubble and a panel holding [Deep Chat](https://github.com/OvidijusParsiunas/deep-chat) (MIT, pinned by version and sha384 integrity), wired to the limb.
-- **Skins**: a folder with `skin.json` (texts, phrases, places), `skin.css` (the look) and any images they name.
+- **Skins**: a folder with `skin.yaml` (texts, phrases, places), `skin.css` (the look) and any images they name.
 
 ## Install on a node
 
@@ -47,7 +47,7 @@ The widget asks for three files next to itself, using the script's own URL minus
 | file | from | if missing |
 |------|------|------------|
 | `info` | the limb: `{ client, title, max_chars, init, places? }` | the defaults (4000 characters, no init). Opening the panel asks again; if it still fails, the panel shows `strings.unavailable`. |
-| `skin.json` | the skin folder | the built-in texts (Spanish, below) |
+| `skin.json` | the skin folder's `skin.yaml` (or `skin.json`), served as JSON by the limb | the built-in texts (Spanish, below) |
 | `skin.css` | the skin folder | the plain look |
 
 What `info` holds:
@@ -64,7 +64,7 @@ phrase comes from here, never from the limb. The widget picks the first that is 
 1. `window.egptChatPrimeText`: a string, or a function returning one, read when the init goes out. A page that lets its
    user write the phrase sets this.
 2. `data-prime-text="…"` on the script tag.
-3. `strings.prime_text` in `skin.json`: the plugin's default for the chatbox. The built-in default is empty.
+3. `strings.prime_text` in `skin.yaml`: the plugin's default for the chatbox. The built-in default is empty.
 
 The phrase is trimmed, control characters become spaces, and it is capped at `max_chars`. If all three are empty the init
 carries no phrase and the limb sends nothing to the being: no turn, no notice. A reload or a second tab does not repeat the
@@ -80,13 +80,21 @@ opening into a conversation that already has lines.
 
 An operator who used `prime_text` in the chatbox's block in eGPT's config moves it to the skin's `strings.prime_text`.
 
-## skin.json
+## skin.yaml
 
-```json
-{
-  "strings": { "title": "…", "intro": "…", "waiting": ["…"], "waiting_cold": ["…"], "prime_text": "…" },
-  "places": { "dashboard": { "user_strip": true, "css": ".egc{right:24px}" } }
-}
+The skin is written as YAML (comments allowed). The widget still asks for `skin.json`: the limb serves it from the folder's `skin.yaml`, parsed and sent as JSON, so the widget needs no YAML parser. In one folder `skin.yaml` beats `skin.json`; across folders the last one holding either wins. A `skin.json` alone still works. A `skin.yaml` that does not parse is a 500 (logged with its path and line) and the widget runs on its built-in texts.
+
+```yaml
+strings:
+  title: …
+  intro: …
+  waiting: ["…"]
+  waiting_cold: ["…"]
+  prime_text: …
+places:
+  dashboard:
+    user_strip: true
+    css: ".egc{right:24px}"
 ```
 
 `strings` replaces any of the built-in texts, one key at a time. A value that is not a string is ignored.
