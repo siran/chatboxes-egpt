@@ -94,6 +94,7 @@
     return C;
   };
 
+  // skin.json is what the limb serves; the operator writes skin.yaml and eGPT core converts it on the way out.
   Promise.all([get('info', 'json'), get('skin.json', 'json'), get('skin.css', 'text')]).then(function (r) {
     egptChat(configOf(r[0], r[1], r[2]));
   });
