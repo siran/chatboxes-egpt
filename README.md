@@ -108,11 +108,14 @@ places:
 | `open`, `close` | `Abrir chat`, `Cerrar` | the bubble's and the minimise button's labels |
 | `end`, `end_confirm`, `end_yes`, `cancel` | `Terminar conversación`, … | ending the conversation: the button, the question, yes, no |
 | `error`, `too_long`, `too_many`, `unavailable` | `No se pudo enviar…`, … | a failed line (any failure, 413, 429), and a panel that cannot open |
+| `title_taken` | (none) | the text for a 409 `title_taken` (the chatbox has `unique_title` and another chat holds the visitor's title). Empty: the server's own `message` is shown |
 | `identity` | `No pudimos verificar tu sesión…` | a 401: the signed identity was refused or has expired |
 | `support` | `Soporte` | heads a human support line: `Soporte · <user>` |
 | `waiting` | `[]` (⏳) | phrases rotating in the loading bubble, each shown for 2.5 s; at most 12 phrases of 80 characters |
 | `waiting_cold` | `[]` (= waiting) | the set used when the line goes to a cold conversation, one the being has not been warmed for lately. The limb says which in the POST's `cold`; until it answers, the widget guesses from its own last line. |
 | `prime_text` | (none) | the opening phrase for `init: prime` when the page gives none (see "The opening phrase"); empty: nothing is sent |
+
+A refused line or init: when the limb answers a non-OK status with JSON that has a string `message`, the visitor sees that message (cut at 200 characters, shown as text, never as markup) instead of `error`. Order: the skin's string for the error's code (`title_taken`), then `identity`, `too_long`, `too_many` for 401, 413, 429, then the server's `message`, then `error`. A 409 on the init is shown once in the panel and the init is not sent again.
 
 `places` gives each place name (lowercase letters, digits, `-` and `_`) two optional settings:
 - `css`: up to 20000 characters, added after `skin.css`.

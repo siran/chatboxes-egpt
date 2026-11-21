@@ -40,7 +40,7 @@ function page({ identity = null, stored = {}, place = null, attrs = {}, hook, va
     if (name === 'messages' || name === 'end') {
       calls.push({ href, init, body: init?.body ? JSON.parse(init.body) : null });
       const r = responses.shift() ?? { status: 200, json: { session: 'tok-1', message: { id: '1', seq: 1, text: 'hola' }, seq: 0, messages: [] } };
-      return { ok: r.status < 300, status: r.status, json: async () => r.json };
+      return { ok: r.status < 300, status: r.status, json: async () => { if (r.bad) throw new SyntaxError('not json'); return r.json; } };
     }
     assets.push(href);
     if (!has(files, name)) return { ok: false, status: 404, json: async () => ({ error: 'not found' }), text: async () => '' };
@@ -395,5 +395,83 @@ describe('the warm-up on open (data-prime, prime_text)', () => {
   it('a skin prime_text that is not a string is ignored: no phrase', async () => {
     const p = await loaded({ identity: tok(), files: { info: PRIME, 'skin.json': { strings: { prime_text: ['x'] } } } });
     assert.equal(has(p.calls[0].body, 'prime_text'), false);
+  });
+});
+
+describe("a refused line or init: the server's message", () => {
+  const TAKEN = { error: 'title_taken', message: 'this name is already in use here' };
+  const GENERIC = 'No se pudo enviar. Intenta de nuevo.';
+  const line = async (reply, files) => {
+    const { p, signals } = await opened({ identity: tok(), files: files ?? { info: INFO } });
+    p.responses.push(reply);
+    signals.newUserMessage.listener({ messages: [{ text: 'hola' }] });
+    await flush();
+    return signals.got;
+  };
+
+  it("a 409 shows the server's message, not the generic text, and is not retried", async () => {
+    const { p, signals } = await opened({ identity: tok() });
+    p.responses.push({ status: 409, json: TAKEN });
+    const before = p.calls.length;
+    signals.newUserMessage.listener({ messages: [{ text: 'hola' }] });
+    await flush();
+    assert.deepEqual(signals.got, { error: TAKEN.message });
+    assert.equal(p.calls.length, before + 1);
+  });
+
+  it('the generic text stays when there is no body, the JSON is unparsable, or it has no string message', async () => {
+    for (const r of [{ status: 409 }, { status: 409, bad: true }, { status: 409, json: { error: 'title_taken' } }, { status: 409, json: { message: 7 } }, { status: 409, json: ['x'] }, { status: 400, json: { message: '  ' } }]) {
+      assert.deepEqual(await line(r), { error: GENERIC }, JSON.stringify(r));
+    }
+  });
+
+  it('the message is escaped (a <b> renders as text) and cut at 200 characters', async () => {
+    const got = await line({ status: 409, json: { message: '<b>x</b> <img src=x onerror=1>' } });
+    // Deep Chat puts an error bubble through markdown into innerHTML, so the widget escapes it as the loading bubble does.
+    assert.equal(got.error, '&#60;b&#62;x&#60;/b&#62; &#60;img src=x onerror=1&#62;');
+    assert.ok(!/[<>]/.test(got.error));
+    const long = await line({ status: 409, json: { message: 'a'.repeat(500) } });
+    assert.equal(long.error.length, 200);
+  });
+
+  it("the skin's strings.title_taken beats the server message; 401, 413 and 429 keep their own strings", async () => {
+    const files = { info: INFO, 'skin.json': { strings: { title_taken: 'Ese nombre ya está en uso.' } } };
+    assert.deepEqual(await line({ status: 409, json: TAKEN }, files), { error: 'Ese nombre ya está en uso.' });
+    assert.deepEqual(await line({ status: 409, json: { error: 'other', message: 'otro' } }, files), { error: 'otro' });
+    assert.deepEqual(await line({ status: 413, json: { error: 'x', message: 'too long' } }), { error: 'El mensaje es demasiado largo.' });
+    assert.deepEqual(await line({ status: 429, json: { error: 'x', message: 'slow' } }), { error: 'Demasiados mensajes. Espera unos minutos.' });
+    assert.deepEqual(await line({ status: 401, json: { message: 'm' } }), { error: DEFAULT_IDENTITY });
+  });
+
+  it('init 409: the message is shown once in the panel (textContent) and the init is not sent again', async () => {
+    const identity = tok();
+    const files = { info: { ...INFO, init: 'prime' } };
+    const p = page({ identity, attrs: { 'data-prime': 'open' }, files });
+    p.responses.push({ status: 409, json: { error: 'title_taken', message: '<b>taken</b>' } });
+    p.run();
+    await flush();
+    p.open(); await flush();
+    assert.equal(p.calls.filter((c) => c.body?.kind === 'init').length, 1);
+    assert.equal(p.part('.egc-err').textContent, '<b>taken</b>');
+    assert.equal(p.part('.egc-err').hidden, false);
+    assert.equal(p.part('.egc-err').innerHTML, undefined);
+    p.open(); p.open(); await flush();   // close and open again
+    assert.equal(p.calls.filter((c) => c.body?.kind === 'init').length, 1);
+    assert.equal(p.part('.egc-err').textContent, '<b>taken</b>');
+  });
+
+  it('init 409 on page load (no data-prime) also stops after one try, and a non-409 init failure shows nothing', async () => {
+    const identity = tok();
+    const files = { info: { ...INFO, init: true } };
+    const a = page({ identity, files });
+    a.responses.push({ status: 409, json: TAKEN });
+    a.run(); await flush();
+    a.open(); await flush();
+    assert.equal(a.calls.filter((c) => c.body?.kind === 'init').length, 1);
+    assert.equal(a.part('.egc-err').textContent, TAKEN.message);
+    const b = page({ identity, files });
+    b.responses.push({ status: 500, json: { message: 'boom' } });
+    b.run(); await flush();
+    assert.equal(b.part('.egc-err')?.textContent ?? '', '');
   });
 });

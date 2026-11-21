@@ -29,8 +29,11 @@
     intro: '',   // the panel's first line (Deep Chat introMessage), shown again after an end; empty: none
     waiting: [],   // short phrases rotating in the loading bubble instead of ⏳; empty: ⏳
     waiting_cold: [],   // the same, for a line to a cold conversation (the being not warmed lately); empty: waiting
+    title_taken: '',   // the 409 title_taken answer (unique_title): empty: the server's own message is shown
     prime_text: '',   // the opening phrase sent when the chatbox opens (init: prime) if the page gives none; empty: none is sent
   };
+  var CODES = ['title_taken'];   // error codes the skin may give a text of its own (a string of that name)
+  var MSG_MAX = 200;   // the server's message is shown to the visitor, cut here
   var PHRASES = ['waiting', 'waiting_cold'];
   var NAME_RE = /^[a-z0-9][a-z0-9_-]*$/;
   var PLACE_CSS_MAX = 20000, MAX_CHARS = 4000;
@@ -205,11 +208,35 @@
         q('.egc-head span').textContent = S.title;
       });
     };
+    // A non-OK reply as { status, code, message }: the limb's JSON { error, message } if it sent one, else just the
+    // status. The message is the server's text, shown with textContent only and cut at MSG_MAX.
+    var failed = function (r) {
+      var e = { status: r.status, code: '', message: '' };
+      return Promise.resolve().then(function () { return r.json(); }).then(function (j) {
+        if (isMap(j)) {
+          if (typeof j.error === 'string') e.code = j.error;
+          if (typeof j.message === 'string' && j.message.trim()) e.message = j.message.trim().slice(0, MSG_MAX);
+        }
+        return e;
+      }, function () { return e; });
+    };
+    // What the visitor reads for a failure e (an object from failed(), or {status: 0} for no answer): the skin's own
+    // text for the error's code (strings.title_taken), else the localized text for 401/413/429, else the server's
+    // message, else generic (the skin's strings.error, or the given one). Deep Chat renders an error bubble as markdown
+    // into innerHTML, so inChat (the bubble) gets the server's message escaped as text; the panel's err is textContent.
+    var textFor = function (e, generic, inChat) {
+      if (!isMap(e)) return generic;
+      if (CODES.indexOf(e.code) >= 0 && S[e.code]) return S[e.code];
+      if (e.status === 401) return S.identity;
+      if (e.status === 413) return S.too_long;
+      if (e.status === 429) return S.too_many;
+      return e.message ? (inChat ? esc(e.message) : e.message) : generic;
+    };
     var fetchLog = function () {
       if (!token) return Promise.resolve([]);
       return fetch(base + 'messages?session=' + encodeURIComponent(token) + idq).then(function (r) {
         if (r.status === 404) { token = null; store(KEY, null); return { seq: 0, messages: [] }; }
-        return r.ok ? r.json() : Promise.reject(r.status);
+        return r.ok ? r.json() : failed(r).then(function (e) { return Promise.reject(e); });
       }).then(function (j) { since = j.seq; return j.messages; });
     };
 
@@ -248,9 +275,9 @@
     // No answer or a 5xx: the same line again, with the same id (the server keeps one), after BACKOFF[n].
     var postLine = function (text, id, n) {
       return fetch(base + 'messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ session: token, text: text, id: id, identity: identity, place: sent }) })
-        .then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); }, function () { return Promise.reject(0); })
-        .catch(function (status) {
-          if ((status && status < 500) || n >= BACKOFF.length) return Promise.reject(status);
+        .then(function (r) { return r.ok ? r.json() : failed(r).then(function (e) { return Promise.reject(e); }); }, function () { return Promise.reject({ status: 0 }); })
+        .catch(function (e) {
+          if ((e.status && e.status < 500) || n >= BACKOFF.length) return Promise.reject(e);
           return new Promise(function (ok) { setTimeout(ok, BACKOFF[n]); }).then(function () { return postLine(text, id, n + 1); });
         });
     };
@@ -274,7 +301,7 @@
           if (renewed) { token = j.session; store(KEY, token); }
           if (renewed || !es) listen();
         })
-        .catch(function (status) { sig.onResponse({ error: status === 401 ? S.identity : status === 413 ? S.too_long : status === 429 ? S.too_many : S.error }); })
+        .catch(function (e) { sig.onResponse({ error: textFor(e, S.error, true) }); })
         .then(function () { if (!--inflight) held.splice(0).forEach(show); });
       if (!token && !opening) opening = done.then(function () { opening = null; });
     };
@@ -359,7 +386,8 @@
       v = v.replace(/[\u0000-\u001f\u007f]+/g, ' ').replace(/ {2,}/g, ' ').trim();
       return v ? v.slice(0, C.maxChars) : null;
     };
-    var inited = false;
+    var inited = false, initErr = null;   // initErr: the init's refusal, shown once; the init is never sent again
+    var showErr = function (t) { err.textContent = t; err.hidden = false; };
     var sendInit = function () {
       if (inited || !C.init || !identity) return;
       inited = true;
@@ -367,7 +395,7 @@
       var t = primeText();
       if (t) body.prime_text = t;
       opening = fetch(base + 'messages', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) })
-        .then(function (r) { return r.ok ? r.json() : null; })
+        .then(function (r) { return r.ok ? r.json() : failed(r).then(function (e) { if (e.status === 409) { initErr = e; showErr(textFor(e, S.unavailable)); } return null; }); })
         .then(function (j) { if (j && j.session !== token) { token = j.session; store(KEY, token); listen(); } }, function () { /* the next line says what failed */ })
         .then(function () { opening = null; });
     };
@@ -380,11 +408,10 @@
       if (starting) return;
       starting = true;
       wantFocus = !!focus;
-      err.hidden = true;
-      Promise.all([loadLib(), Promise.resolve(opening).then(fetchLog), needInfo()]).then(function (r) { build(r[1]); }, function (status) {
+      err.hidden = !initErr;
+      Promise.all([loadLib(), Promise.resolve(opening).then(fetchLog), needInfo()]).then(function (r) { build(r[1]); }, function (e) {
         starting = false;
-        err.textContent = status === 401 ? S.identity : S.unavailable;
-        err.hidden = false;
+        showErr(textFor(e, S.unavailable));
       });
     };
     // End: the same token (conversation, team topic) gets a fresh thread; the panel starts over.
